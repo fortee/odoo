@@ -433,20 +433,21 @@ def is_leaf(element, internal=False):
 
 def select_from_where(cr, select_field, from_table, where_field, where_ids, where_operator):
     # todo: merge into parent query as sub-query
-    res = []
-    if where_ids:
-        if where_operator in ['<', '>', '>=', '<=']:
-            cr.execute('SELECT "%s" FROM "%s" WHERE "%s" %s %%s' % \
-                (select_field, from_table, where_field, where_operator),
-                (where_ids[0],))  # TODO shouldn't this be min/max(where_ids) ?
-            res = [r[0] for r in cr.fetchall()]
-        else:  # TODO where_operator is supposed to be 'in'? It is called with child_of...
-            for i in range(0, len(where_ids), cr.IN_MAX):
-                subids = where_ids[i:i + cr.IN_MAX]
-                cr.execute('SELECT "%s" FROM "%s" WHERE "%s" IN %%s' % \
-                    (select_field, from_table, where_field), (tuple(subids),))
-                res.extend([r[0] for r in cr.fetchall()])
-    return res
+    if not where_ids:
+        return []
+    if where_operator in ['<', '>', '>=', '<=']:
+        cr.execute('SELECT DISTINCT "%s" FROM "%s" WHERE "%s" %s %%s' % \
+            (select_field, from_table, where_field, where_operator),
+            (where_ids[0],))  # TODO shouldn't this be min/max(where_ids) ?
+        return [r[0] for r in cr.fetchall()]
+    # TODO where_operator is supposed to be 'in'? It is called with child_of...
+    res = set()
+    for i in range(0, len(where_ids), cr.IN_MAX):
+        subids = where_ids[i:i + cr.IN_MAX]
+        cr.execute('SELECT DISTINCT "%s" FROM "%s" WHERE "%s" IN %%s' % \
+            (select_field, from_table, where_field), (tuple(subids),))
+        res.update(r[0] for r in cr.fetchall())
+    return list(res)
 
 def select_distinct_from_where_not_null(cr, select_field, from_table):
     cr.execute('SELECT distinct("%s") FROM "%s" where "%s" is not null' % (select_field, from_table, select_field))
