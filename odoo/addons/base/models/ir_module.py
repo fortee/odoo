@@ -357,6 +357,8 @@ class Module(models.Model):
             raise UserError(msg % (module_name, e.args[0]))
 
     def _state_update(self, newstate, states_to_update, level=100):
+        # @ls_upgrade(+1): added logging
+        _logger.info('Start state_update: %s', (level, self.mapped('name')))
         if level < 1:
             raise UserError(_('Recursion error in modules dependencies !'))
 
@@ -371,6 +373,9 @@ class Module(models.Model):
                     raise UserError(_("You try to install module '%s' that depends on module '%s'.\nBut the latter module is not available in your system.") % (module.name, dep.name,))
                 if dep.depend_id.state == newstate:
                     ready_mods += dep.depend_id
+                # @ls_upgrade(+2): Don't bother setting 'to install' on already installed modules!
+                elif dep.depend_id.state == 'installed' and newstate == 'to install':
+                    ready_mods += dep.depend_id
                 else:
                     update_mods += dep.depend_id
 
@@ -384,6 +389,8 @@ class Module(models.Model):
             if module.state in states_to_update:
                 module.write({'state': newstate, 'demo': module_demo})
 
+        # @ls_upgrade(+1): added logging
+        _logger.error('Info state update for %s', (level, self.mapped('name')))
         return demo
 
     @assert_log_admin_access
